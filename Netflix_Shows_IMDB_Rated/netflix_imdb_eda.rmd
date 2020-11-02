@@ -1,0 +1,175 @@
+---
+title: "Netflix shows with IMDB ratings EDA"
+author: "Kevin"
+date: "27 September 2020"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r}
+library(tidyverse)
+library(data.table)
+library(lubridate)
+library(naniar)
+library(tidygraph)
+library(ggraph)
+library(igraph)
+```
+
+```{r}
+netflix_raw = fread('../../data/netflix_titles.csv', na.strings = c(''))
+summary(netflix_raw)
+colSums(is.na(netflix_raw))
+head(netflix_raw)
+```
+
+```{r}
+netflix <- netflix_raw %>% 
+  mutate(date_added=parse_date_time(date_added, "%B %d, %Y")) %>%
+  mutate(duration_int=as.integer(word(duration))) 
+head(netflix)
+summary(netflix)
+```
+
+```{r}
+imdb_raw = fread('../../data/IMDB_ratings.csv')
+imdb <- imdb_raw %>% 
+  mutate(titleID=str_sub(IMDB_titleID,10,16)) %>%
+  separate(IMDB_rating, sep=" ", into=c("average_rating",NA,NA,"No_of_ratings"),convert = TRUE) %>%
+  mutate(average_rating=as.numeric(average_rating),
+         No_of_ratings=as.numeric(gsub(",","",No_of_ratings)))
+head(imdb)
+summary(imdb)
+View(imdb)
+```
+
+
+```{r}
+netflix_rated = cbind(netflix, imdb)
+View(netflix_rated)
+```
+
+# Actors
+```{r}
+actors <- netflix_rated %>%
+  filter(!is.na(cast)) %>%
+  mutate(actor = strsplit(cast, split=', ')) %>%
+  unnest(actor)
+actors %>% filter(actor=='Tom Hanks')
+```
+
+```{r}
+appearance_count <- actors %>%
+  group_by(actor) %>%
+  summarise(appearances=n()) %>%
+  arrange(desc(appearances))
+actors_app <- actors %>% 
+  left_join(appearance_count, 'actor')%>%
+  filter(appearances>3) %>%
+  filter(No_of_ratings>100) 
+View(actors_app)
+actors_app %>%
+  group_by(actor, appearances) %>%
+  summarise(rating=mean(average_rating)) %>%
+  arrange(desc(rating))
+```
+
+```{r}
+actors_app %>%
+  group_by(show_id, title) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count))
+```
+
+```{r}
+table(netflix$type)
+```
+
+
+----------------------------
+
+```{r}
+movies <- netflix %>% filter(type=='Movie')
+tv <- netflix %>% filter(type=='TV Show')
+```
+
+```{r}
+ggplot(movies, aes(x=duration_int)) + geom_histogram()
+```
+
+```{r}
+ggplot(tv, aes(x=duration_int)) + geom_histogram()
+```
+
+Surprise, surprise, many netflix TV shows do not get renewed past their first season.
+
+```{r}
+netflix_rated %>% 
+  mutate(log_ratings=log10(No_of_ratings)) %>%
+  ggplot(aes(x=log_ratings)) + 
+    geom_histogram()
+```
+------------------------------
+# Network Analysis
+
+
+```{r}
+actors1 <- actors %>% select(actor, show_id) %>% rename(from=actor)
+actors2 <- actors %>% select(actor, show_id) %>% rename(to=actor)
+edges <- actors1 %>% inner_join(actors2, by='show_id') %>% filter(from!=to) 
+edges
+```
+
+```{r}
+nodes <- actors %>% select(actor) %>% distinct(actor)
+```
+
+```{r}
+g <- tbl_graph(edges = edges)
+g %>%
+  activate(edges) 
+```
+
+```{r}
+dg <- decompose.graph(g)
+plot(dg[[5]])
+```
+
+```{r}
+biggest <- dg[[1]] %>% as_tbl_graph()
+biggest <- biggest %>% mutate(pagerank = centrality_pagerank())
+biggest %>% as_tibble() %>% arrange(desc(pagerank)) 
+```
+
+
+---------------
+Structure 2
+
+```{r}
+#actors1 <- actors %>% select(actor, show_id) %>% rename(from=actor)
+#actors2 <- actors %>% select(actor, show_id) %>% rename(to=actor)
+edges <- actors %>% rename(from=actor) %>% rename(to=title) %>% filter(from!=to) %>% select(from, to)
+edges
+```
+
+```{r}
+nodes <- actors %>% select(actor) %>% distinct(actor)
+```
+
+```{r}
+g <- tbl_graph(edges = edges)
+g %>%
+  activate(edges) 
+```
+
+```{r}
+dg <- decompose.graph(g)
+plot(dg[[5]])
+```
+
+```{r}
+biggest <- dg[[1]] %>% as_tbl_graph()
+biggest <- biggest %>% mutate(pagerank = centrality_pagerank())
+biggest %>% as_tibble() %>% arrange(desc(pagerank)) 
+```

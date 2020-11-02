@@ -1,0 +1,86 @@
+---
+title: "Daniel Correspondence"
+author: "Kevin"
+date: "30 October 2020"
+output:
+  pdf_document: default
+  html_document: default
+---
+
+```{r echo=FALSE}
+library(tidyverse)
+library(tidygraph)
+library(ggraph)
+library(visNetwork)
+```
+
+```{r}
+letters <- read_csv("../../data/correspondence-data-1585.txt")
+letters
+```
+
+```{r}
+sources <- letters %>%
+  distinct(source) %>%
+  rename(label = source)
+
+destinations <- letters %>%
+  distinct(destination) %>%
+  rename(label = destination)
+
+nodes <- sources %>% 
+  full_join(destinations, by = "label") %>% 
+  rowid_to_column("id")
+nodes
+```
+
+```{r}
+per_route <- letters %>%  
+  group_by(source, destination) %>%
+  summarise(weight = n()) %>% 
+  ungroup()
+per_route
+```
+
+```{r}
+edges <- per_route %>% 
+  left_join(nodes, by = c("source" = "label")) %>% 
+  rename(from = id) %>% 
+  left_join(nodes, by = c("destination" = "label")) %>% 
+  rename(to = id) %>%
+  select(from, to, weight)
+edges
+```
+
+```{r}
+routes_tidy <- tbl_graph(nodes = nodes, edges = edges, directed = TRUE)
+routes_tidy %>% 
+  activate(edges) %>% 
+  arrange(desc(weight))
+```
+
+```{r}
+ggraph(routes_tidy) + geom_edge_link() + geom_node_point() + theme_graph()
+```
+
+```{r}
+ggraph(routes_tidy, layout = "graphopt") + 
+  geom_node_point() +
+  geom_edge_link(aes(width = weight), alpha = 0.8) + 
+  scale_edge_width(range = c(0.2, 2)) +
+  geom_node_text(aes(label = label), repel = TRUE) +
+  labs(edge_width = "Letters") +
+  theme_graph()
+```
+
+```{r}
+edges <- mutate(edges, width = weight/5 + 1)
+visNetwork(nodes, edges) %>% 
+  visIgraphLayout(layout = "layout_with_fr") %>% 
+  visEdges(arrows = "middle")
+```
+
+```{r}
+routes_tidy <- routes_tidy %>% mutate(pagerank = centrality_pagerank())
+routes_tidy %>% as_tibble() %>% arrange(desc(pagerank)) 
+```
