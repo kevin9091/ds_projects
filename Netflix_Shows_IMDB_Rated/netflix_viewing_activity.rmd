@@ -1,0 +1,127 @@
+---
+title: "Netflix_viewing_activity"
+author: "Kevin"
+date: "8 January 2021"
+output: html_document
+---
+
+```{r message=FALSE}
+library(tidyverse)
+library(ggplot2)
+library(data.table)
+library(lubridate)
+```
+
+```{r}
+raw <- fread('../../data/netflix_viewing_activity.csv', 
+             colClasses=c(`Profile Name`="factor",`Device Type`="factor",
+                          `Supplemental Video Type`="factor",Country="factor",Attributes="factor"))
+raw$`Start Time`=as.POSIXct(raw$`Start Time`)
+#View(raw)
+summary(raw)
+head(raw)
+```
+
+
+```{r}
+netflix_raw = fread('../../data/netflix_titles.csv', na.strings = c(''),
+                    colClasses = c(type='factor'))
+#View(netflix_raw)
+summary(netflix_raw)
+#colSums(is.na(netflix_raw))
+head(netflix_raw)
+```
+
+
+```{r}
+actual_viewing <- raw %>% 
+  filter(`Profile Name`=='Kevin') %>%
+  filter(Attributes=='') %>%
+  filter(`Supplemental Video Type`=='') %>%
+  filter(`Device Type` %in% c('Apple iPad Mini 5th Gen (Wi-Fi)',
+        'Apple iPhone XR','Chrome PC (Cadmium)', 'Netflix Chrome Linux (Cadmium) HTML 5')) %>%
+  select(-c(`Profile Name`,Attributes,`Supplemental Video Type`)) %>%
+  mutate(Duration=hms(Duration),
+  season=str_extract(Title,'Season [0-9]*'),
+  episode=str_extract(Title,'Episode [0-9]*'),
+  type=if_else(is.na(episode),'Movie','TV Series'),
+  show=str_extract(Title,".*(?=: Season)"),
+  show=coalesce(show, Title),
+  year=year(`Start Time`), month=month(`Start Time`), day=day(`Start Time`),
+  date=date(`Start Time`), day_of_week=wday(`Start Time`), hour=hour(`Start Time`),
+  end_time = `Start Time`+Duration)
+
+#View(actual_viewing)
+summary(actual_viewing)
+```
+
+## Most Watched days
+```{r}
+daily_viewing <- actual_viewing %>% 
+  group_by(date) %>%
+  summarise(daily_viewing_time = sum(Duration)) %>%
+  arrange(date) 
+
+min_date <- min(daily_viewing$date)
+max_date <- max(daily_viewing$date)
+consec_dates <- data.frame(date=seq(ymd(min_date),ymd(max_date),by='days'))
+
+daily_viewing <- consec_dates %>% left_join(daily_viewing,'date') %>%
+  replace_na(list(daily_viewing_time=0)) %>%
+  mutate(year=year(date), month=lubridate::month(date, label=TRUE), day=day(date),
+         day_of_week=lubridate::wday(date, label=TRUE)) 
+
+daily_viewing
+#View(daily_viewing)
+#summary(daily_viewing)
+```
+
+```{r}
+qplot(date, daily_viewing_time, data=daily_viewing, geom='line')
+```
+
+```{r}
+daily_viewing %>%
+  filter(date>'2019-08-28') %>%      # Consistent viewing
+  group_by(day_of_week) %>%
+  summarise(avg_viewing_time = mean(daily_viewing_time)) %>%
+  arrange(day_of_week) %>%
+  ggplot(aes(x=day_of_week, y=avg_viewing_time)) +
+  geom_bar(stat = 'identity', aes(fill=day_of_week))
+```
+
+
+```{r}
+daily_viewing %>% group_by(year, month) %>%
+  summarise(avg_viewing_time = mean(daily_viewing_time)) %>%
+  ggplot(aes(x=month, y=avg_viewing_time)) +
+  geom_bar(stat = 'identity', aes(fill=month)) +
+  facet_wrap(~year)
+```
+
+### Percentage of movies I complete
+```{r}
+imdb_movies <- fread('../../data/IMDB_movies.csv')  %>% 
+  select(c(original_title,duration)) %>%
+  mutate(original_title=tolower(original_title))
+(imdb_movies)
+
+
+movies_viewing <- actual_viewing %>% 
+  filter(type=='Movie') %>%
+  group_by(Title) %>%
+  summarise(total_viewing_time=sum(Duration)) %>%
+  mutate(Title=tolower(Title))
+movies_viewing
+
+# movies_data <- netflix_raw %>% 
+#   filter(type=="Movie") %>%
+#   mutate(duration = duration(duration)) %>%
+#   select(c(title,duration))
+# head(movies_data)
+
+distinct(merge(movies_viewing, imdb_movies, by.x = 'Title', by.y='original_title'), Title,
+         .keep_all = TRUE) %>% mutate(completed = ifelse(total_viewing_time+15>duration,1,0)) %>%
+  summarise(mean(completed))
+```
+

@@ -1,0 +1,50 @@
+---
+title: "News Keyword Analysis"
+author: "Kevin"
+date: "10 March 2021"
+output: html_document
+---
+
+```{r echo=FALSE}
+options(warn=-1)
+library(tidyverse)
+library(udpipe)
+```
+
+
+```{r echo=FALSE}
+news <- read.csv('../../data/abcnews-date-text.csv', header = T, stringsAsFactors = F)
+head(news)
+news %>% group_by(publish_date) %>% count() %>% arrange(desc(n))
+news_more <- news %>% mutate(year = str_sub(publish_date,1,4),
+                        month = str_sub(publish_date,5,6),
+                        date = str_sub(publish_date,7,8))
+```
+
+```{r echo=FALSE}
+#model <- udpipe_download_model(language = "english")
+udmodel_english <- udpipe_load_model(file = 'english-ewt-ud-2.5-191206.udpipe')
+```
+
+
+```{r echo=FALSE}
+news_more_2008 <- news_more %>% filter(year == 2008 & month == 10)
+```
+
+
+```{r echo=FALSE}
+s <- udpipe_annotate(udmodel_english, news_more_2008$headline_text)
+x <- data.frame(s)
+x
+```
+
+```{r}
+## Using RAKE
+stats <- keywords_rake(x = x, term = "lemma", group = "doc_id", 
+                       relevant = x$upos %in% c("NOUN", "ADJ"))
+stats$key <- factor(stats$keyword, levels = rev(stats$keyword))
+stats
+barplot(key ~ rake, data = head(subset(stats, freq > 3), 20), col = "red", 
+         main = "Keywords identified by RAKE", 
+         xlab = "Rake")
+```

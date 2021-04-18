@@ -1,0 +1,160 @@
+---
+title: "Spotify Analysis"
+author: "Kevin"
+date: "20 February 2021"
+output:
+  html_document: default
+  pdf_document: default
+  word_document: default
+---
+
+```{r options(warn=-1), echo=FALSE}
+library(tidyverse)
+library(data.table)
+library(lubridate)
+library(knitr)
+```
+
+## Importing data with correct data types
+```{r, echo=FALSE}
+spotify_raw <- fread('song_features.csv')
+spotify <- spotify_raw %>% select(-V1) %>% 
+  mutate(endTime=ymd_hm(endTime),
+         album_release_date=ymd(album_release_date),
+         completed=ifelse(msPlayed==duration_ms,1,0)) %>%
+  mutate(year=year(endTime), month=month(endTime), day=day(endTime), week=week(endTime),
+         date=date(endTime), wday=wday(endTime), hour=hour(endTime), minute=minute(endTime)) %>%
+  arrange(endTime) %>%
+  filter(albumName!="")
+head(spotify) 
+summary(spotify)
+```
+
+## Song level Aggregates
+
+### Most listened to songs by instances and minutes
+```{r, echo=FALSE}
+songs <- spotify %>% 
+  group_by(artistName, trackName) %>%
+  summarise(no_of_streams = n(), 
+            total_minutes = sum(msPlayed)/60000,
+            no_of_completed_streams = sum(completed)) %>%
+  arrange(desc(no_of_streams)) %>%
+  head(10)
+songs
+```
+
+#### By instances
+
+```{r, echo=FALSE}
+songs %>% ggplot(aes(x=reorder(trackName, no_of_streams), y=no_of_streams)) + 
+  geom_bar(stat="identity", aes(fill=trackName)) + coord_flip()
+```
+
+#### By minutes
+
+```{r, echo=FALSE}
+songs %>% ggplot(aes(x=reorder(trackName, total_minutes), y=total_minutes)) + 
+  geom_bar(stat="identity", aes(fill=trackName)) + coord_flip()
+```
+
+### Longest songs
+
+```{r, echo=FALSE}
+spotify %>% 
+  filter(completed==1) %>%
+  distinct(artistName, trackName, duration_ms) %>%
+  mutate(runtime_mins = duration_ms/60000) %>%
+  arrange(desc(runtime_mins)) %>% head(10) %>%
+  ggplot(aes(x=reorder(trackName, runtime_mins), y=runtime_mins)) +
+  geom_bar(stat="identity", aes(fill=trackName)) + coord_flip()
+```
+
+## Artist Level Aggregates
+
+### Most listened Artists by total number of songs played, distinct albums listened to, total duration listened to 
+
+```{r, echo=FALSE}
+artists <- spotify %>%
+  group_by(artistName) %>%
+  summarise(songs_played=n(), distinct_songs=n_distinct(trackName),
+            distinct_albums=n_distinct(albumName), total_duration_hours=sum(msPlayed)/3600000,
+            completed_songs=sum(completed)) %>%
+  arrange(desc(songs_played)) %>% head(10)
+artists
+```
+
+#### Artist with most streams
+
+```{r, echo=FALSE}
+artists %>% ggplot(aes(x=reorder(artistName, songs_played), y=songs_played)) + 
+  geom_bar(stat="identity", aes(fill=artistName)) + coord_flip()
+```
+
+#### Artist with most runtime
+
+```{r, echo=FALSE}
+artists %>% ggplot(aes(x=reorder(artistName, total_duration_hours), y=total_duration_hours)) + 
+  geom_bar(stat="identity", aes(fill=artistName)) + coord_flip()
+```
+
+
+## Album Analysis
+
+### Most listened to album
+
+```{r, echo=FALSE}
+albums <- spotify %>%
+  group_by(artistName, albumName) %>%
+  summarise(no_of_songs_played=n(),
+            total_duration_hours=sum(msPlayed)/3600000,
+            completed_songs=sum(completed)) %>%
+  arrange(desc(no_of_songs_played)) %>% head(10)
+albums
+
+```
+
+### Most listened to album by number of songs
+
+```{r, echo=FALSE}
+albums %>% ggplot(aes(x=reorder(albumName, no_of_songs_played), y=no_of_songs_played)) +
+  geom_bar(stat="identity", aes(fill=albumName)) + coord_flip()
+```
+
+### Most listened to album by time
+
+```{r, echo=FALSE}
+albums %>% ggplot(aes(x=reorder(albumName, total_duration_hours), y=total_duration_hours)) +
+  geom_bar(stat="identity", aes(fill=albumName)) + coord_flip()
+```
+
+## Story of High Visceral Album
+
+```{r, echo=FALSE}
+spotify %>% 
+  filter(albumName=='High Visceral, Pt. 1', year=='2020', week<25) %>%
+  group_by(week,track_no) %>%
+  summarise(count=n()) %>%
+  arrange(week,track_no) %>%
+  ggplot(aes(x=track_no,y=week)) + geom_tile(stat="identity", aes(fill=count)) + 
+  scale_fill_gradient(low="sky blue", high="darkblue")
+```
+
+  It was a different album which i didn't like immediately, but after some weeks it grew on me. Initially, I liked the louder first half of the album, but later I started liking the mellower latter half of the album. Eventually, I moved on to some other album.
+
+## My favorite artists through the months
+
+```{r, echo=FALSE}
+spotify %>% 
+  filter(artistName %in% c('King Gizzard & The Lizard Wizard', 'A Beacon School', 'Psychedelic Porn Crumpets', 'Sufjan Stevens', 'Crumb'), year=='2020') %>%
+  group_by(month,artistName) %>%
+  summarise(count=n()) %>%
+  arrange(month,artistName) %>%
+  ggplot(aes(x=month,y=artistName)) + 
+  geom_tile(stat="identity", aes(fill=count)) + 
+  scale_fill_gradient(low="yellow", high="red")
+```
+
+  The shifting between artists is visible. There were quite a few KGATLW albums that I liked which kept me glued to their stuff till May till I got into PPC's High Visceral. There was one month there where I was really into Sufjan Steven's ambient album Aporia, a departure from my regular genres. After that, I wasn't into music a lot.
+  
+
