@@ -2,7 +2,7 @@
 title: "marketing_data_eda"
 author: "Kevin"
 date: "30 May 2021"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r, warning=FALSE}
@@ -29,7 +29,6 @@ Data is from a iFood CRM(mentioned in kaggle discussions). It is a Brazilian foo
 
 The means of AcceptedCmp and Response and Complain will give the percentage of 1's in the columns.
 Most AcceptedCmp have a 7% success rate. 
-Response rate is about 15%
 
 ```{r}
 marketing_proc <- marketing_raw %>% 
@@ -43,11 +42,16 @@ marketing_proc <- marketing_raw %>%
                              TRUE ~ '>=60'),
          Income_bin = case_when(Income<35000 ~ '<35k',
                                 Income<65000 ~ '35k-65k',
-                                TRUE ~ '>=65k')) 
+                                TRUE ~ '>=65k'),
+         Response=case_when((Response==1 | AcceptedCmp1==1 | AcceptedCmp2==1 | 
+                              AcceptedCmp3==1 | AcceptedCmp4==1 | AcceptedCmp5==1) ~ 1,
+                            TRUE ~ 0)) 
 # Assuming data is extracted around 30th June 2014
 # Assuming parents of customers do not stay with them
 summary(marketing_proc)
 ```
+
+### Response is 1 if any of the accepted or response variables is 1. Thus, response rate is mean of that column, 27%
 
 ## Customer Attributes
 
@@ -73,7 +77,7 @@ Customer base seems to be atleast Graduates mostly
 qplot(marketing_proc$Income, geom='histogram', xlim=c(0,200000))
 ```
 
-Income is nearly symmetrically distributed around \$50000 with a few people around \$150,000 and one person with over $600,000
+Income is nearly symmetrically distributed around \$50000 with a few people around \$150,000 and one person with over \$600,000
 
 ### Marital Status
 
@@ -197,10 +201,10 @@ marketing_proc %>%
 
 ## Correlation
 ```{r, fig.width = 14, fig.height = 11}
-M <- cor(marketing_proc %>% select(-c(Country, Marital_Status, Education, Dt_Customer, Age_bin, Income_bin))) %>%
+fil <- marketing_proc %>% select(-c(Country, Marital_Status, Education, Dt_Customer, Age_bin, Income_bin)) %>%
   filter(!is.na(Income))
+M <- cor(fil)
 corrplot(M)
-?corrplot
 ```
 
 ## Who's making the most purchase in each Product category?(So that we can market the right product to the right demographic)

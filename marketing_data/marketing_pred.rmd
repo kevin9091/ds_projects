@@ -2,7 +2,7 @@
 title: "marketing_prediction"
 author: "Kevin"
 date: "31 May 2021"
-output: html_document
+output: rmarkdown::github_document
 ---
 
 ```{r}
