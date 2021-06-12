@@ -1,0 +1,46 @@
+---
+title: "melbourne_house_price_prediction"
+author: "Kevin"
+date: "29 May 2021"
+output:
+  rmarkdown::github_document: default
+---
+
+```{r warning=FALSE}
+library(tidyverse)
+library(data.table)
+```
+
+```{r}
+house_raw <- fread('data/melb_data.csv', colClasses = c('Suburb' = 'factor', 'Type' = 'factor', 'CouncilArea' = 'factor',
+                                                        'Method' = 'factor', 'Regionname' = 'factor', 'Postcode'='factor'))
+summary(house_raw)
+```
+
+## Missing Data Imputation(Mean)
+
+```{r}
+house_raw <- house_raw %>% mutate_at(vars(Car),~ifelse(is.na(.x), mean(.x, na.rm = TRUE), .x))
+```
+
+```{r}
+set.seed(101) 
+sample <- sample.int(n = nrow(house_raw), size = floor(.8*nrow(house_raw)), replace = F)
+train <- house_raw[sample, ]
+test  <- house_raw[-sample, ]
+```
+
+## Baseline - Only numeric features(Rooms, Distance, Bedroom2, Bathroom, Car, Landsize, Lattitude, Longitude, Propertycount)
+(Ignoring BuildingArea and YearBuilt)
+
+```{r}
+RMSE <- function(error) { sqrt(mean(error^2)) }
+base_model <- lm(Price ~ Rooms + Distance + Bedroom2 + Bathroom + Car + Landsize +
+              Lattitude + Longtitude + Propertycount, data=train)
+summary(base_model)
+RMSE(base_model$residuals)
+```
+
+```{r}
+plot(x=base_model$fitted.values, y=base_model$residuals)
+```

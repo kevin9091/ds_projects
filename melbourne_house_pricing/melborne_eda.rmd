@@ -1,0 +1,86 @@
+---
+title: "melbourne_house_pricing"
+author: "Kevin"
+date: "28 May 2021"
+output: html_document
+---
+
+```{r, warnings=FALSE}
+library(tidyverse)
+library(data.table)
+```
+
+```{r}
+house_raw <- fread('data/melb_data.csv', colClasses = c('Suburb' = 'factor', 'Type' = 'factor', 'CouncilArea' = 'factor',
+                                                        'Method' = 'factor', 'Regionname' = 'factor', 'Postcode'='factor'))
+head(house_raw)
+```
+
+```{r}
+summary(house_raw)
+```
+
+### About features
+To Predict - Price
+Geographic Categories - Suburb, Address, Regionname, Postcode
+Time Feature - Date
+House Characteristics - Rooms, Bedroom2, Bathroom, 
+Type, Method, Distance, Car, YearsBuilt, 
+Landsize, BuildingArea, CouncilArea, Lat-Long
+
+
+## Suburb/Postcode (one-one correspondence)
+
+```{r}
+house_raw %>% 
+  group_by(Suburb) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count)) %>%
+  head(10) %>%
+  ggplot(aes(x=reorder(Suburb, count), y=count)) +
+  geom_bar(stat='identity') +
+  coord_flip()
+```
+
+```{r}
+house_raw %>% 
+  group_by(Suburb) %>%
+  summarise(count=n()) %>%
+  arrange(desc(count)) %>%
+  ggplot(aes(x=count)) +
+  geom_bar()
+```
+
+```{r}
+house_raw %>% 
+  group_by(Suburb) %>%
+  summarise(Postcode=first(Postcode), Regionname=first(Regionname), 
+            avg_price=mean(Price), max_price=max(Price), min_price=min(Price), count=n()) %>%
+  arrange(desc(avg_price))
+```
+
+```{r}
+house_raw %>% 
+  group_by(Suburb) %>%
+  summarise(Postcode=first(Postcode), Regionname=first(Regionname), 
+            avg_price=mean(Price), max_price=max(Price), min_price=min(Price), count=n()) %>%
+  arrange((avg_price))
+```
+
+```{r}
+house_raw %>% group_by(Suburb, CouncilArea) %>% count()
+```
+
+## Rooms
+
+```{r}
+house_raw %>%
+  group_by(Rooms) %>%
+  summarise(count = n())
+```
+
+```{r}
+house_raw %>% 
+  group_by(Rooms) %>%
+  summarise(avg_price = mean(Price))
+```
